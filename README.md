@@ -1,0 +1,1 @@
+# synacore_challenge_rust
