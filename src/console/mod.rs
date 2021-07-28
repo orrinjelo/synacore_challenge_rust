@@ -2,12 +2,15 @@ use log::{trace, debug, info, warn, error};
 use crate::vm::Vm;
 use crate::util::{get_file_as_byte_vec};
 use regex::Regex;
-use std::{error::Error};
-use termion::{event::Key};
-use crate::util::event::{Event, Events};
+use std::{error::Error, thread};
 use crossbeam;
-use std::io;
-use termion::{raw::IntoRawMode};
+// use ctrlc;
+// use std::sync::atomic::{AtomicBool, Ordering};
+// use std::sync::Arc;
+// use termion::{event::Key};
+// use crate::util::event::{Event, Events};
+// use std::io;
+// use termion::{raw::IntoRawMode};
 
 #[allow(dead_code)]
 fn _get_rid_of_log_unused_import_warnings() {
@@ -30,14 +33,14 @@ pub struct Console {
     vm: Vm,
     running: bool,
     input: String,
-    messages: Vec<String>,
-    events: Events,
+    history: Vec<String>,
+    // events: Events,
 }
 
 impl Console
 {
     pub fn new(input_file: String, memsize: usize) -> Console {
-        let _stdout = io::stdout().into_raw_mode().unwrap();
+        // let _stdout = io::stdout().into_raw_mode().unwrap();
         Console {
             vm: Vm::new(
                 get_file_as_byte_vec(&input_file),
@@ -45,76 +48,47 @@ impl Console
             ),
             running: true,
             input: String::new(),
-            messages: Vec::new(),
-            events: Events::new(),
+            history: Vec::new(),
+            // events: Events::new(),
         }
     }
 
     pub fn run(&mut self) -> Result<(), Box<dyn Error>> {
+        info!("Started console!");
+
         while self.running {
             self.handle_input()?;
         }
+
         Ok(())
     }
 
     fn handle_input(&mut self) -> Result<(), Box<dyn Error>>  {
         // Handle input
-        if let Event::Input(input) = self.events.next()? {
-            match input {
-                Key::Char('\n') => {
-                    if !self.maybe_parse_input() {
-                        self.messages.push(self.input.drain(..).collect());
-                    }
-                    // print!("> ");
-                },
-                Key::Char(c) => {
-                    println!("Pushing {}", c);
-                    self.input.push(c);
-                },
-                Key::Backspace => {
-                    self.input.pop();
-                },
-                Key::Ctrl('a') => {
-                    println!("Pausing...");
-                    self.vm.pause();
-                },
-                Key::Ctrl(c) => {
-                    println!("Caught a CTRL-{}", c);
-                },
-                Key::Esc => {
-                    // app.input_mode = InputMode::Normal;
-                    // events.enable_exit_key();
-                    println!("ESC!");
-                },
-                _ => {
-                    // println!("test.");
-                },
-            }
-        }
-        Ok(())
-    }
+        std::io::stdout().flush();
+        let bytes = std::io::stdin().read_line(&mut self.input)?;
 
-    fn maybe_parse_input(&mut self) -> bool {
-        if self.input == "!run".to_string() {
+        trace!("{} bytes read", bytes);
+        trace!("Input: {}", self.input);
+
+        if self.input.trim().contains("!run") {
             crossbeam::scope(|scope| {
-                scope.spawn(move || {
+                scope.defer(move || {
                     self.vm.execute_until_done();
                 });
             });
-            return true;
-        } else if self.input == "!reset".to_string() {
+            trace!("Thread spawned.");
+        } else if self.input.trim().eq("!reset") {
             self.reset_vm();
-            return true;
         } else if self.input.contains("!break") {
             self.add_breakpoint();
-            return true;
-        } else if self.input == "!quit".to_string() {
+        } else if self.input.trim().eq("!quit") {
+            self.reset_vm();
             self.running = false;
-            return true;
         } else {
             self.vm.insert_buffer(self.input.clone());
         }
-        return false;
+        Ok(())
     }
 
     #[allow(dead_code)]
@@ -134,5 +108,7 @@ impl Console
         let bp = cap[1].parse::<usize>().unwrap();
 
         self.vm.add_breakpoint(bp);
+
+        debug!("Added breakpoint @ {}", bp);
     }
 }

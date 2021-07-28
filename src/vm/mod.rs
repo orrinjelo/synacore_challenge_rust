@@ -4,6 +4,8 @@ use std::fs::File;
 use std::io::LineWriter;
 use std::thread;
 use std::time::Duration;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 #[allow(dead_code)]
 fn _get_rid_of_log_unused_import_warnings() {
@@ -245,17 +247,18 @@ impl Instruction {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Vm {
     blueprint: Vec<u16>,    // Max 2**15
     memory: Vec<u16>,    // Max 2**15
     registers: Vec<u16>, // 8
     stack: Vec<u16>,     // Resizeable
     pc: usize,
-    stopped: bool,
+    stopped: Arc<AtomicBool>,
     buffer: String,
     breakpoints: Vec<usize>,
-    paused: bool,
+    paused: Arc<AtomicBool>,
+    step_delay: u64,
 }
 
 impl Vm {
@@ -266,10 +269,11 @@ impl Vm {
             registers: vec![0; 8],
             stack: Vec::new(),
             pc: 0,
-            stopped: false,
+            stopped: Arc::new(AtomicBool::new(false)),
             buffer: String::new(),
             breakpoints: Vec::new(),
-            paused: false,
+            paused: Arc::new(AtomicBool::new(false)),
+            step_delay: 1000,
         };
         for i in 0..input.len()/2 {
             let op: u16 = ((input[i*2+1] as u16) << 8) + (input[i*2] as u16);
@@ -279,6 +283,13 @@ impl Vm {
             vm.blueprint.push(0u16);
         }
         vm.reset();
+
+        let p = vm.stopped.clone();
+        ctrlc::set_handler(move || {
+            warn!("SIGINT caught!");
+            p.store(true, Ordering::SeqCst);
+        }).expect("Error setting up SIGINT handler.");
+
         vm
     }
 
@@ -287,9 +298,9 @@ impl Vm {
         self.registers = vec![0; 8];
         self.stack = Vec::new();
         self.pc = 0;
-        self.stopped = false;
+        self.stopped.store(false, Ordering::SeqCst);
         self.buffer = String::new();
-        self.paused = false;
+        self.paused.store(false, Ordering::SeqCst);
     }
 
     pub fn add_breakpoint(&mut self, bp: usize) {
@@ -319,7 +330,7 @@ impl Vm {
                         self.pc += 1;
                     },
                     InstructionCode::HALT => {
-                        self.stopped = true;
+                        self.stopped.store(true, Ordering::SeqCst);
                     },
                     InstructionCode::OUT => {
                         let a = i.operands.0;
@@ -346,6 +357,7 @@ impl Vm {
                         let a = i.operands.0;
                         while self.buffer.len() == 0 {
                             // std::io::stdin().read_line(&mut self.buffer).unwrap();
+                            // Other thread will insert into buffer
                         }
                         if a >= MAX_VAL as u16 {                 
                             self.registers[a as usize % MAX_VAL] = self.buffer.remove(0) as u16;
@@ -687,13 +699,15 @@ impl Vm {
 
     pub fn execute_until_done(&mut self) {
         info!("execute_until_done()");
+
         self.pc = 0;
-        while !self.stopped {
-            if !self.paused {
+        while !self.stopped.load(Ordering::SeqCst) {
+            if !self.paused.load(Ordering::SeqCst) {
                 self.execute_once();
             } else {
                 thread::sleep(Duration::from_millis(250));
             }
+            thread::sleep(Duration::from_millis(self.step_delay));
         }
         debug!("Execution has stopped.");
     }
@@ -716,12 +730,17 @@ impl Vm {
 
     #[allow(dead_code)]
     pub fn pause(&mut self) {
-        self.paused = true;
+        self.paused.store(true, Ordering::SeqCst);
     }
 
     #[allow(dead_code)]
     pub fn unpause(&mut self) {
-        self.paused = false;
+        self.paused.store(false, Ordering::SeqCst);
+    }
+
+    #[allow(dead_code)]
+    pub fn is_stopped(&mut self) -> bool {
+        self.stopped.load(Ordering::SeqCst)
     }
 
     fn report_error(&mut self, i: Instruction, disassemble: bool) {
@@ -804,36 +823,14 @@ mod tests {
 
         let mut vm = Vm::new(code, 4);
 
-        assert_eq!(
-            vm,
-            Vm {
-                memory: vec![0u16; 4],
-                registers: vec![0; 8],
-                stack: Vec::new(),
-                pc: 0,
-                buffer: String::new(),
-                stopped: false,
-                blueprint: Vec::new(),
-                breakpoints: Vec::new(),
-                paused: false,
-            }
+        assert_false!(
+            vm.is_stopped()
         );
 
         vm.execute_once();
 
-        assert_eq!(
-            vm,
-            Vm {
-                memory: vec![0u16; 4],
-                registers: vec![0; 8],
-                stack: Vec::new(),
-                pc: 0,
-                buffer: String::new(),
-                stopped: true,
-                blueprint: Vec::new(),
-                breakpoints: Vec::new(),
-                paused: false,
-            }
+        assert_true!(
+            vm.is_stopped()
         );
 
     }
