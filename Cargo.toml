@@ -12,8 +12,8 @@ log4rs = "0.13.0"
 env_logger = "~0.8"
 rustop = "~1.1.1"
 regex = "~1.4"
-#tui = "0.14"
-#termion = "1.5"
+tui = "0.14"
+termion = "1.5"
 crossbeam = "0.3.2"
 ctrlc = { version = "3.1.9", features = ["termination"] }
 

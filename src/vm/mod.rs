@@ -284,11 +284,11 @@ impl Vm {
         }
         vm.reset();
 
-        let p = vm.stopped.clone();
-        ctrlc::set_handler(move || {
-            warn!("SIGINT caught!");
-            p.store(true, Ordering::SeqCst);
-        }).expect("Error setting up SIGINT handler.");
+        // let p = vm.stopped.clone();
+        // ctrlc::set_handler(move || {
+        //     warn!("SIGINT caught!");
+        //     p.store(true, Ordering::SeqCst);
+        // }).expect("Error setting up SIGINT handler.");
 
         vm
     }
