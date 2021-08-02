@@ -25,13 +25,6 @@ fn _get_rid_of_log_unused_import_warnings() {
     error!("Example error.");
 }
 
-// std::io::stdin().read_line(&mut self.buffer).unwrap();
-// synopsis "Synacor Challenge 2020";
-// opt memsize:usize=32768, desc: "Memory size of VM";
-// opt input_file:String="../challenge.bin".to_string(), desc: "Input file";
-// opt disassemble:Option<String>, desc: "Dissassemble input into ASM.";
-// opt bp:Option<usize>, desc: "Add a breakpoint.";
-
 #[allow(dead_code)]
 pub struct Console {
     vm: Vm,
