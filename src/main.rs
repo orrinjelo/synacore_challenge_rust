@@ -6,7 +6,7 @@ use log::{Level}; // trace, debug, info, warn, error
 use env_logger;
 use rustop::opts;
 use std::{error::Error};
-
+use futures::executor::block_on;
 use std::io::Write as IoWrite;
 
 
@@ -42,7 +42,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         })
         .init();
 
-    c.run()?;
+    block_on(c.run())?;
 
     Ok(())
 }

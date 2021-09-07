@@ -2,7 +2,8 @@ use log::{trace, debug, info, warn, error};
 use std::io::{stdin, stdout, Read, Write};
 use std::fs::File;
 use std::io::LineWriter;
-use std::thread;
+// use std::thread;
+use async_std::task;
 use std::time::Duration;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -697,7 +698,7 @@ impl Vm {
         }
     }
 
-    pub fn execute_until_done(&mut self) {
+    pub async fn execute_until_done(&mut self) {
         info!("execute_until_done()");
 
         self.pc = 0;
@@ -705,9 +706,9 @@ impl Vm {
             if !self.paused.load(Ordering::SeqCst) {
                 self.execute_once();
             } else {
-                thread::sleep(Duration::from_millis(250));
+                task::sleep(Duration::from_millis(250)).await;
             }
-            thread::sleep(Duration::from_millis(self.step_delay));
+            task::sleep(Duration::from_millis(self.step_delay)).await;
         }
         debug!("Execution has stopped.");
     }

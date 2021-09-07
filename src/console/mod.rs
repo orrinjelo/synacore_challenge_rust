@@ -3,7 +3,7 @@ use crate::vm::Vm;
 use crate::util::{get_file_as_byte_vec};
 use regex::Regex;
 use std::{error::Error};
-use crossbeam;
+// use crossbeam;
 use termion::event::Key;
 use termion::input::TermRead;
 use termion::raw::IntoRawMode;
@@ -11,6 +11,7 @@ use termion::cursor::DetectCursorPos;
 use termion::{color};
 use std::io::{Write, stdout, stdin};
 use std::cmp;
+use async_std::task;
 // use ctrlc;
 // use std::sync::atomic::{AtomicBool, Ordering};
 // use std::sync::Arc;
@@ -71,7 +72,7 @@ impl Console
     }
 
 
-    pub fn run(&mut self) -> Result<(), Box<dyn Error>> {
+    pub async fn run(&mut self) -> Result<(), Box<dyn Error>> {
 
         let stdin = stdin();
         let mut stdout = stdout().into_raw_mode().unwrap();
@@ -87,7 +88,8 @@ impl Console
         for input in stdin.keys() {
             match input.unwrap() {
                 Key::Char('\n') => {
-                    if !self.maybe_parse_input() {
+                    let s = self.clone()
+                    if !s.maybe_parse_input().await {
                         self.history.push(self.input.drain(..).collect());
                     }
                     if self.history.len() > 0 {
@@ -167,13 +169,9 @@ impl Console
         Ok(())
     }
 
-    fn maybe_parse_input(&mut self) -> bool {
+    async fn maybe_parse_input(&mut self) -> bool {
         if self.input == "!run".to_string() {
-            crossbeam::scope(|scope| {
-                scope.spawn(move || {
-                    self.vm.execute_until_done();
-                });
-            });
+            task::spawn(self.vm.execute_until_done()).await;
             return true;
         } else if self.input == "!reset".to_string() {
             self.reset_vm();

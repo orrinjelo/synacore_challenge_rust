@@ -16,6 +16,8 @@ tui = "0.14"
 termion = "1.5"
 crossbeam = "0.3.2"
 ctrlc = { version = "3.1.9", features = ["termination"] }
+futures = "0.3"
+async-std = "0.99.5"
 
 [dev-dependencies]
 rand = "0.7"
